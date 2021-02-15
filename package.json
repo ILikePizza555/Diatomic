@@ -1,0 +1,30 @@
+{
+  "name": "diatomic",
+  "version": "0.1.0",
+  "description": "\"A feed reader for the modern internet.\"",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ILikePizza555/Diatomic.git"
+  },
+  "author": "",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/ILikePizza555/Diatomic/issues"
+  },
+  "homepage": "https://github.com/ILikePizza555/Diatomic#readme",
+  "devDependencies": {
+    "@types/chai": "^4.2.15",
+    "@types/mocha": "^8.2.0",
+    "chai": "^4.3.0",
+    "eslint": "^7.20.0",
+    "mocha": "^8.3.0",
+    "typescript": "^4.1.5"
+  },
+  "dependencies": {
+    "vue": "^2.6.12"
+  }
+}
