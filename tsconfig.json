@@ -1,0 +1,27 @@
+{
+    "compilerOptions": {
+        "target": "ES5",
+        "module": "esnext",
+        "strict": true,
+        "importHelpers": true,
+        "moduleResolution": "node",
+        "sourceMap": true,
+        "types": [
+            "mocha",
+            "chai"
+        ],
+        "lib": [
+            "ESNext",
+            "DOM",
+            "DOM.Iterable",
+            "ScriptHost"
+        ]
+    },
+    "include": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.vue",
+        "tests/**/*.ts",
+        "tests/**/*.tsx"
+    ]
+}
