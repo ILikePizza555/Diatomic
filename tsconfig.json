@@ -1,11 +1,12 @@
 {
     "compilerOptions": {
-        "target": "ES5",
+        "target": "esnext",
         "module": "esnext",
         "strict": true,
         "importHelpers": true,
         "moduleResolution": "node",
         "sourceMap": true,
+        "jsx": "preserve",
         "types": [
             "mocha",
             "chai"
