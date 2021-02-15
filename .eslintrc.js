@@ -12,8 +12,11 @@ module.exports = {
         '@typescript-eslint',
     ],
     extends: [
-        'plugin:vue/vue3-recommended',
+        'plugin:vue/vue3-strongly-recommended',
         'eslint:recommended',
         'plugin:@typescript-eslint/recommended'
     ],
+    rules: {
+        "vue/html-indent": ["error", 4, {}]
+    }
 };
