@@ -12,7 +12,8 @@
         "ecmaVersion": 2020
     },
     "rules": {
-        "indent": ["warn", 4]
+        "indent": ["warn", 4],
+        "quotes": ["error", "double", {"allowTemplateLiterals": true}]
     },
     "overrides": [
         {
