@@ -1,10 +1,18 @@
 { pkgs ? import <nixpkgs> {} }:
 
+with pkgs;
+
 pkgs.mkShell {
   buildInputs = [
-    pkgs.nodejs-15_x
-
-    # keep this line if you use bash
-    pkgs.bashInteractive
+    nodejs-15_x
   ];
+
+  shellHook = ''
+    if [ ! -d node_modules ]; then
+      npm install
+      npm i @vue/cli
+    fi
+    echo "run \"npm run serve\" to load local copy of service"
+    export PATH="$(pwd)/node_modules/.bin:$PATH";
+  '';
 }
