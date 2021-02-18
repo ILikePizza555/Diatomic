@@ -13,5 +13,6 @@ pkgs.mkShell {
       npm i @vue/cli
     fi
     echo "run \"npm run serve\" to load local copy of service"
+    export PATH="./node_modules/.bin:$PATH";
   '';
 }
