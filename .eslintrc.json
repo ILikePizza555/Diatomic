@@ -13,7 +13,8 @@
     },
     "rules": {
         "indent": ["warn", 4],
-        "quotes": ["error", "double", {"allowTemplateLiterals": true}]
+        "quotes": ["error", "double", {"allowTemplateLiterals": true}],
+        "space-before-function-paren": ["error", "never"]
     },
     "overrides": [
         {
