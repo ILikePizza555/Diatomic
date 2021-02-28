@@ -177,7 +177,7 @@ export abstract class AbstractGroupTagParserState<TagType extends SaxesTag, Emit
      * If unexpectedTagBehavior is set to Parse then this method is called to construct the appropriate StateTransition object.
      * @param tag The tag that was encountered.
      */
-    protected abstract transitionUnexpectedTag(tag: TagType): StateTransition<TagType, EmitObject>
+    protected transitionUnexpectedTag?(tag: TagType): StateTransition<TagType, EmitObject>
 
     /**
      * Called to transition the state when a tag defined by isAllowedTag is encountered.
@@ -197,7 +197,10 @@ export abstract class AbstractGroupTagParserState<TagType extends SaxesTag, Emit
         case UnexpectedTagBehavior.Ignore:
             return new StateTransition(this)
         case UnexpectedTagBehavior.Parse:
-            return this.transitionUnexpectedTag(tag)
+            if (this.transitionUnexpectedTag !== undefined) {
+                return this.transitionUnexpectedTag(tag)
+            }
+            throw new Error("UnexpectedTagBehavior set to parse, but transitionUnexpectedTag is not implemented!")
         }
     }
 }
