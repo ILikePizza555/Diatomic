@@ -1,9 +1,9 @@
 import { Transformer } from "web-streams-polyfill/ponyfill"
 import { SaxesParser, SaxesTagNS } from "saxes"
-import { AbstractGroupTagParserState, MissingXMLTagError, SimpleTextParserState, StateTransition, XMLParseEventHandlers } from "./XMLDataParser"
+import { AbstractGroupTagParserState, AbstractTagParserState, MissingXMLTagError, SimpleTextParserState, StateTransition, XMLParseEventHandlers } from "./XMLDataParser"
 
 /** Union types of the objects emitted by the parser. */
-type FeedObject = {channel: ChannelData}
+type FeedObject = {channel: ChannelData} | {item: ItemData}
 
 interface ChannelData {
     title?: string;
@@ -21,8 +21,25 @@ interface ChannelData {
     ttl?: number;
 }
 
+interface ItemData {
+    title?: string;
+    link?: string;
+    description?: string;
+    author?: string;
+    category?: string;
+    comments?: string;
+    enclosure?: {url: string; length: number; type: MimeType};
+    guid?: string;
+    pubDate?: Date;
+    source?: {url: string, name: string}
+}
+
 function isChannelDataKey(testString: string): testString is keyof ChannelData {
     return /title|link|description|language|copyright|managingEditor|webMaster|pubDate|lastBuildDate|category|generator|cloud|ttl/.test(testString)
+}
+
+function isItemDataKey(testString: string): testString is keyof ItemData {
+    return /title|link|description|language|author|category|comments|enclosure|guid|pubDate|source/.test(testString)
 }
 
 function createChannelDataFeedObject<K extends keyof ChannelData, T extends Required<ChannelData>[K]>(key: K, value: T): { channel: ChannelData } {
@@ -59,11 +76,15 @@ class ChannelElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedOb
     }
 
     protected isAllowedTag(tag: SaxesTagNS): boolean {
-        return isChannelDataKey(tag.name)
+        return isChannelDataKey(tag.name) || tag.name === "item"
     }
 
     // We can add the additional type constraint here because isAllowedTag checks for this already.
-    protected transitionExpectedTag(tag: SaxesTagNS & {name: keyof ChannelData}): StateTransition<SaxesTagNS, FeedObject> {
+    protected transitionExpectedTag(tag: SaxesTagNS & { name: keyof ChannelData | "item" } ): StateTransition<SaxesTagNS, FeedObject> {
+        if (tag.name === "item") {
+            
+        }
+        
         if (tag.name === "ttl") {
             const tagName = tag.name
             return new StateTransition(new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, parseInt(t))))
@@ -82,6 +103,31 @@ class ChannelElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedOb
     protected transitionFinishedState(): StateTransition<SaxesTagNS, FeedObject> {
         // Return to a new RootElementState, effectively resetting the parser.
         return new StateTransition(new RootElementState())
+    }
+}
+
+class ItemElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedObject> {
+    public readonly stateName = "item"
+
+    private previousState: ChannelElementState
+    private itemData: ItemData = {}
+
+    constructor(previousState: ChannelElementState) {
+        super("item")
+        this.beginParse = true
+        this.previousState = previousState
+    }
+
+    protected isAllowedTag(tag: SaxesTagNS): boolean {
+        return isItemDataKey(tag.name)
+    }
+
+    protected transitionExpectedTag(tag: SaxesTagNS & { name: keyof ItemData}): StateTransition<SaxesTagNS, FeedObject> {
+        
+    }
+
+    protected transitionFinishedState(): StateTransition<SaxesTagNS, FeedObject> {
+        return new StateTransition(this.previousState, {item: this.itemData})
     }
 }
 
