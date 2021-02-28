@@ -1,30 +1,21 @@
 import { Transformer } from "web-streams-polyfill/ponyfill"
 import { SaxesParser, SaxesTagNS } from "saxes"
-import { Either, right, left } from "fp-ts/lib/Either"
-
-export class RSSParserError implements Error {
-    name = "RSSParserError"
-    message: string;
-
-    constructor(msg: string) {
-        this.message = "RSS Parsing Error: " + msg
-    }
-}
+import { AbstractGroupTagParserState, MissingXMLTagError, SimpleTextParserState, StateTransition, XMLParseEventHandlers } from "./XMLDataParser"
 
 /** Union types of the objects emitted by the parser. */
-type ParsedObject = any
+type FeedObject = {channel: ChannelData}
 
 interface ChannelData {
-    title: string;
-    link: string;
-    description: string;
+    title?: string;
+    link?: string;
+    description?: string;
     language?: string;
     copyright?: string;
     managingEditor?: string;
     webMaster?: string;
     pubDate?: Date;
     lastBuildDate?: Date;
-    category: string[];
+    category?: string;
     generator?: string;
     cloud?: string;
     ttl?: number;
@@ -34,105 +25,74 @@ function isChannelDataKey(testString: string): testString is keyof ChannelData {
     return /title|link|description|language|copyright|managingEditor|webMaster|pubDate|lastBuildDate|category|generator|cloud|ttl/.test(testString)
 }
 
-/** Union type of all parser states */
-type RSSParserState = RootElementState | ChannelElementState | ItemElementState
-
-/**
- * An object returned by parser states that defines the next state the parser should use and optionally an object to output to the stream.
- **/
-class NextState {
-    nextState: RSSParserState;
-    streamOutput?: ParsedObject;
-
-    constructor(nextState: RSSParserState, streamOutput?: ParsedObject) {
-        this.nextState = nextState
-        this.streamOutput = streamOutput
-    }
-
-    /**
-     * Constructs a new NextState objects with the specified parameters and returns it as an Either.
-     */
-    static AsLeft<E>(nextState: RSSParserState, streamOutput?: ParsedObject): Either<NextState, E> {
-        return left(new NextState(nextState, streamOutput))
-    }
-}
-
-class ItemElementState {
-    public readonly stateName = "item"
-}
-
-/**
- * Parser state that parses the channel tag.
- */
-class ChannelElementState {
-    public readonly stateName = "channel"
-
-    private _tagData: Partial<ChannelData> = {}
-
-    private _currentTag?: keyof ChannelData
-
-    opentag(tag: SaxesTagNS): Either<NextState, Error> {
-        if (!this._currentTag) {
-            return right(new RSSParserError(`Encountered unexpected tag ${tag.name} in ${this._currentTag}`))
+function createChannelDataFeedObject<K extends keyof ChannelData, T extends Required<ChannelData>[K]>(key: K, value: T): { channel: ChannelData } {
+    return {
+        channel: {
+            [key]: value
         }
-
-        // Check if the tag is an item so we can change state
-        if (tag.name === "item") {
-            return NextState.AsLeft()
-        }
-
-        // If the tag is one of the ones we care about then start listening for text.
-        if (isChannelDataKey(tag.name)) {
-            this._currentTag = tag.name
-            return NextState.AsLeft(this)
-        }
-
-        return NextState.AsLeft(this)
-    }
-
-    text(text: string): Error | void {
-        if (!this._currentTag) {
-            return new RSSParserError(`Recived unexpected text "${text}"`)
-        }
-
-        // This is typesafe only as long as _notableTags and _tagData are defined by the keys of _tagData
-        // Note that no type-checking is done on Object.defineProperty
-        Object.defineProperty(this._tagData, this._currentTag, text)
-    }
-
-    closetag(tag: SaxesTagNS): Either<NextState, Error> {
-        if (tag.name === this._currentTag) {
-            this._currentTag = undefined
-            return NextState.AsLeft(this)
-        }
-
-        return right(new RSSParserError(`Encountered unexpected closing tag "${tag.name}", expected "${this._currentTag}"`))
     }
 }
 
 /**
  * Verifies that the first tag of a feed is valid for the RSS standard.
  */
-class RootElementState {
+class RootElementState implements XMLParseEventHandlers<SaxesTagNS, FeedObject> {
     public readonly stateName = "root"
 
-    opentag(tag: SaxesTagNS): Either<NextState, Error> {
+    opentagHandler(tag: SaxesTagNS): StateTransition<SaxesTagNS, FeedObject> {
         if (tag.name !== "rss") {
-            return right(new RSSParserError(`Feed does not begin with tag named "rss", instead got "${tag.name}"`))
+            throw new MissingXMLTagError(`Feed does not begin with tag named "rss", instead got "${tag.name}"`)
         }
 
-        return NextState.AsLeft(new ChannelElementState())
+        return new StateTransition(new ChannelElementState())
     }
 }
 
-export class RSSParserTransformer implements Transformer<string, FeedDocument> {
+/**
+ * Parser state that parses the channel tag.
+ */
+class ChannelElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedObject> {
+    public readonly stateName = "channel"
+
+    constructor() {
+        super("channel")
+    }
+
+    protected isAllowedTag(tag: SaxesTagNS): boolean {
+        return isChannelDataKey(tag.name)
+    }
+
+    // We can add the additional type constraint here because isAllowedTag checks for this already.
+    protected transitionExpectedTag(tag: SaxesTagNS & {name: keyof ChannelData}): StateTransition<SaxesTagNS, FeedObject> {
+        if (tag.name === "ttl") {
+            const tagName = tag.name
+            return new StateTransition(new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, parseInt(t))))
+        }
+
+        if (tag.name === "lastBuildDate" || tag.name === "pubDate") {
+            const tagName = tag.name
+            const nextState = new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, new Date(t)))
+            return new StateTransition(nextState)
+        }
+
+        const tagName = tag.name
+        return new StateTransition(new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, t)))
+    }
+
+    protected transitionFinishedState(): StateTransition<SaxesTagNS, FeedObject> {
+        // Return to a new RootElementState, effectively resetting the parser.
+        return new StateTransition(new RootElementState())
+    }
+}
+
+export class RSSParserTransformer implements Transformer<string, FeedObject> {
     private _parser = new SaxesParser({ xmlns: true, fragments: true });
 
     private _error?: Error;
 
-    private state: RSSParserState = new RootElementState();
+    private state: XMLParseEventHandlers<SaxesTagNS, FeedObject> = new RootElementState();
 
-    start(controller: TransformStreamDefaultController<FeedDocument>) {
+    start(controller: TransformStreamDefaultController<FeedObject>) {
         // Setup callbacks
         this._parser.on("error", err => {
             this._error = err
@@ -140,11 +100,38 @@ export class RSSParserTransformer implements Transformer<string, FeedDocument> {
         })
 
         this._parser.on("opentag", tag => {
+            if (this.state.opentagHandler) {
+                const handlerResult = this.state.opentagHandler(tag)
+                this.handleStateTransition(controller, handlerResult)
+            }
+        })
 
+        this._parser.on("closetag", tag => {
+            if (this.state.closetagHandler) {
+                const handlerResult = this.state.closetagHandler(tag)
+                this.handleStateTransition(controller, handlerResult)
+            }
+        })
+
+        this._parser.on("text", text => {
+            if (this.state.textHandler) {
+                const handlerResult = this.state.textHandler(text)
+                this.handleStateTransition(controller, handlerResult)
+            }
         })
     }
 
-    transform(chunk: string, controller: TransformStreamDefaultController<FeedDocument>) {
+    transform(chunk: string, controller: TransformStreamDefaultController<FeedObject>) {
+        this._parser.write(chunk)
+    }
 
+    private handleStateTransition(controller: TransformStreamDefaultController<FeedObject>, stateTransition: StateTransition<SaxesTagNS, FeedObject> | void) {
+        if (stateTransition) {
+            this.state = stateTransition.newState
+
+            if (stateTransition.emitObject) {
+                controller.enqueue(stateTransition.emitObject)
+            }
+        }
     }
 }
