@@ -15,8 +15,6 @@
         "indent": ["warn", 4],
         "quotes": ["error", "double", {"allowTemplateLiterals": true}],
         "space-before-function-paren": ["error", "never"],
-        // Turn off this rule because typescript is perfectly fine with use before defining
-        "@typescript-eslint/no-use-before-define": "off",
     },
     "overrides": [
         {
