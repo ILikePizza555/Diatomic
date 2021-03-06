@@ -1,6 +1,8 @@
 /** Contains types to help build streaming parsers from XML data. */
-import { State } from "fp-ts/lib/State"
-import { SaxesTag } from "saxes"
+
+import { SaxesAttributeNS, SaxesTag, SaxesTagNS } from "saxes"
+
+export type EmitObjectConstructor<T, EmitObject> = (data: T, attributes: Map<string, SaxesAttributeNS>) => EmitObject
 
 /**
  * Exception type for when an unexpected opentag is encountered while parsing.
@@ -40,220 +42,113 @@ export class MissingXMLTagError implements Error {
     }
 }
 
-export interface XMLParseEventHandlers<TagType extends SaxesTag, EmitObject> {
-    opentagHandler?: (tag: TagType) => StateTransition<TagType, EmitObject> | void;
-    textHandler?: (text: string) => StateTransition<TagType, EmitObject> | void;
-    closetagHandler?: (tag: TagType) => StateTransition<TagType, EmitObject> | void;
-}
-
 /**
  * Class returned by parser states to signify a new state or an object to emitted to the stream.
  * @template TagType The specific SaxesTag type.
  * @template EmitObject The object type that will be emitted to the stream.
  */
-export class StateTransition<TagType extends SaxesTag, EmitObject> {
-    public newState: XMLParseEventHandlers<TagType, EmitObject>
+export class StateTransition<EmitObject> {
+    public newState: BaseParserState<EmitObject>
     public emitObject?: EmitObject
 
-    constructor(newState: XMLParseEventHandlers<TagType, EmitObject>, emitObject?: EmitObject) {
+    constructor(newState: BaseParserState<EmitObject>, emitObject?: EmitObject) {
         this.newState = newState
         this.emitObject = emitObject
     }
 }
 
-export abstract class AbstractTextTagParserState<TagType extends SaxesTag, EmitObject> implements XMLParseEventHandlers<TagType, EmitObject> {
-    /** The previous state to return too once this state is completed */
-    protected returnState: XMLParseEventHandlers<TagType, EmitObject>
-    /** The name of the tag currently being parsed. (Or the name of the closing tag we are listening for.) */
-    protected tagName: string
-    /** The text that was gathered from the XML parser. */
-    protected text: string
-
-    constructor(tagName: string, returnState: XMLParseEventHandlers<TagType, EmitObject>) {
-        this.tagName = tagName
-        this.returnState = returnState
-        this.text = ""
-    }
-
-    opentagHandler(tag: TagType): never {
-        throw new UnexpectedXMLTagError(tag, this.tagName)
-    }
-
-    textHandler(text: string): void {
-        this.text += text
-    }
-
-    closetagHandler(tag: TagType): StateTransition<TagType, EmitObject> {
-        // The only time we get an unexpected closing tag is if we have malformed XML because of the opentag check.
-        // Therefore we don't need to check here.
-        return new StateTransition(this.returnState, this.emitObject())
-    }
-
-    /** Returns a new instance of EmitObject to be emitted to the stream. */
-    protected abstract emitObject(): EmitObject
+/**
+ * Defines an that can be fed data directly from its children.
+ */
+export interface Collector<T> {
+    /**
+     * Called by the child to give data back to to parent.
+     * @param data;
+     */
+    onFeed(data: T): void;
 }
 
 /**
- * Implementation of AbstractTextTagParserState that allows the user to pass a function to construct an instance of EmitObject
+ * Base class for ParserState objects.
  */
-export class SimpleTextParserState<TagType extends SaxesTag, EmitObject> extends AbstractTextTagParserState<TagType, EmitObject> {
-    protected emitObjectConstructor: (text: string) => EmitObject
+export abstract class BaseParserState<EmitObject> {
+    /** The XML tag that that started this parser state. */
+    protected openTag: SaxesTagNS;
 
-    constructor(tagName: string, returnState: XMLParseEventHandlers<TagType, EmitObject>, emitObjectConstructor: (text: string) => EmitObject) {
-        super(tagName, returnState)
-        this.emitObjectConstructor = emitObjectConstructor
+    /** A map of attributes from openTag. This exists to provide the convienced of the Map object methods instead of using plain objects. */
+    protected readonly attributes: Map<string, SaxesAttributeNS>;
+
+    /** The parser state to return to after this state is finished. */
+    protected parent: BaseParserState<EmitObject>;
+
+    constructor(openTag: SaxesTagNS, parent: BaseParserState<EmitObject>) {
+        this.openTag = openTag
+        this.parent = parent
+
+        this.attributes = new Map<string, SaxesAttributeNS>(Object.keys(openTag.attributes).map(key => [key, openTag.attributes[key]]))
     }
 
-    emitObject(): EmitObject {
-        return this.emitObjectConstructor(this.text)
-    }
+    /**
+     * Called by the parser controller on an opentag event.
+     * Can return a StateTransition object to emit an object and switch state.
+     **/
+    onOpenTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {}
+
+    /**
+     * Called by the parser controller on a closetag event.
+     * Can return a StateTransition object to emit an object and switch state.
+     **/
+    onText(text: string): StateTransition<EmitObject> | void {}
+
+    /**
+     * Called by the parser controller on a closetag event.
+     * Can return a StateTransition object to emit an object and switch state.
+     */
+    abstract onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void
 }
 
-export enum UnexpectedTagBehavior {
-    Ignore,
-    Error,
-    Parse
-}
+/**
+ * Defines a parser state that parses text within a tag to emit it to the stream.
+ */
+export class TextParserState<EmitObject> extends BaseParserState<EmitObject> {
+    protected text: string
+    protected emitObjectTextConstructor: EmitObjectConstructor<string, EmitObject>
 
-export abstract class AbstractGroupTagParserState<TagType extends SaxesTag, EmitObject> implements XMLParseEventHandlers<TagType, EmitObject> {
-    /** The name of the tag to start parsing. Other encountered tags follow the behavior of unexpectedTagBehavior. */
-    protected tagName: string
-
-    /** A flag to track if we encountered the open tag defined by tagName. */
-    protected beginParse: boolean
-
-    protected unexpectedTagBehavior: UnexpectedTagBehavior
-
-    constructor(tagName: string, unexpectedTagBehavior: UnexpectedTagBehavior = UnexpectedTagBehavior.Ignore) {
-        this.tagName = tagName
-        this.unexpectedTagBehavior = unexpectedTagBehavior
-        this.beginParse = false
+    constructor(openTag: SaxesTagNS, emitObjectTextConstructor: EmitObjectConstructor<string, EmitObject>, parent: BaseParserState<EmitObject>) {
+        super(openTag, parent)
+        this.emitObjectTextConstructor = emitObjectTextConstructor
+        this.text = ""
     }
 
-    opentagHandler(tag: TagType): StateTransition<TagType, EmitObject> | void {
-        if (!this.beginParse) {
-            return this.handleOpenTagBeforeBegin(tag)
-        }
+    onText(text: string): StateTransition<EmitObject> | void {
+        this.text = this.text.concat(text)
     }
 
-    closetagHandler(tag: TagType): StateTransition<TagType, EmitObject> {
-        if (tag.name !== this.tagName) {
-            throw new InvalidXMLCloseTagError(tag, "Did you forget to handle a close tag in a previous state?")
-        }
-
-        return this.transitionFinishedState()
-    }
-
-    /**
-     * Handles the opentag event before the main tag has been encountered.
-     */
-    protected handleOpenTagBeforeBegin(tag: TagType): StateTransition<TagType, EmitObject> {
-        if (tag.name === this.tagName) {
-            this.beginParse = true
-            return new StateTransition(this)
-        }
-
-        return this.handleUnexpectedTag(tag)
-    }
-
-    /**
-     * Handles the opentag event after the main tag has been encountered (i.e once parsing has begun).
-     */
-    protected handleOpenTagAfterBegin(tag: TagType): StateTransition<TagType, EmitObject> {
-        if (this.isAllowedTag(tag)) {
-            return this.transitionExpectedTag(tag)
-        }
-
-        return this.handleUnexpectedTag(tag)
-    }
-
-    /**
-     * Returns true if the tag is one of the tags that this parser state is interested in.
-     * @param tag The tag to check.
-     */
-    protected abstract isAllowedTag(tag: TagType): boolean
-
-    /**
-     * If unexpectedTagBehavior is set to Parse then this method is called to construct the appropriate StateTransition object.
-     * @param tag The tag that was encountered.
-     */
-    protected transitionUnexpectedTag?(tag: TagType): StateTransition<TagType, EmitObject>
-
-    /**
-     * Called to transition the state when a tag defined by isAllowedTag is encountered.
-     * @param tag The tag that was encountered.
-     */
-    protected abstract transitionExpectedTag(tag: TagType): StateTransition<TagType, EmitObject>
-
-    /**
-     * Called to transition out of this state when the close tag has been encountered.
-     */
-    protected abstract transitionFinishedState(): StateTransition<TagType, EmitObject>
-
-    private handleUnexpectedTag(tag: TagType): StateTransition<TagType, EmitObject> {
-        switch (this.unexpectedTagBehavior) {
-        case UnexpectedTagBehavior.Error:
-            throw new UnexpectedXMLTagError(tag)
-        case UnexpectedTagBehavior.Ignore:
-            return new StateTransition(this)
-        case UnexpectedTagBehavior.Parse:
-            if (this.transitionUnexpectedTag !== undefined) {
-                return this.transitionUnexpectedTag(tag)
-            }
-            throw new Error("UnexpectedTagBehavior set to parse, but transitionUnexpectedTag is not implemented!")
+    onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
+        if (this.parent) {
+            return new StateTransition(this.parent, this.emitObjectTextConstructor(this.text, this.attributes))
         }
     }
 }
 
-export type TransitionFunction<TagType extends SaxesTag, EmitObject> = (currentState: SimpleGroupParserState<TagType, EmitObject>, tag: TagType) => StateTransition<TagType, EmitObject>
+/**
+ * Similar to TextParserState, but feeds text to a collector instead of emitting it.
+ */
+export class ReturnTextParserState<EmitObject> extends BaseParserState<EmitObject> {
+    protected collector: Collector<string>
+    protected text: string
 
-export interface StateTransitionTable<TagType extends SaxesTag, EmitObject> {
-    [key: string]: TransitionFunction<TagType, EmitObject>;
-}
-
-export class SimpleGroupParserState<TagType extends SaxesTag, EmitObject> extends AbstractGroupTagParserState<TagType, EmitObject> {
-
-    /**
-     * Provides a mapping of expected tags to a function to create a state transition object for that tag.
-     */
-    protected stateTransitionTable: StateTransitionTable<TagType, EmitObject>
-
-    protected unexpectedTagTransitionFunction?: TransitionFunction<TagType, EmitObject>
-
-    protected transitionFinishedStateFunction: () => StateTransition<TagType, EmitObject>
-
-    constructor(
-        tagName: string,
-        stateTransitionTable: StateTransitionTable<TagType, EmitObject>,
-        unexpectedTagBehavior: UnexpectedTagBehavior = UnexpectedTagBehavior.Ignore,
-        transitionFinishedStateFunction: () => StateTransition<TagType, EmitObject>,
-        unexpectedTagTransitionFunction?: TransitionFunction<TagType, EmitObject>) {
-        super(tagName, unexpectedTagBehavior)
-        this.stateTransitionTable = stateTransitionTable
-        this.transitionFinishedStateFunction = transitionFinishedStateFunction
-        this.unexpectedTagTransitionFunction = unexpectedTagTransitionFunction
-
-        if (this.unexpectedTagBehavior === UnexpectedTagBehavior.Parse && this.unexpectedTagTransitionFunction === undefined) {
-            throw new Error("unexpectedTagTransitionFunction cannot be undefined if unexpectedTagBehavior is set to Parse")
-        }
+    constructor(openTag: SaxesTagNS, collector: Collector<string>, parent: BaseParserState<EmitObject>) {
+        super(openTag, parent)
+        this.collector = collector
+        this.text = ""
     }
 
-    protected isAllowedTag(tag: TagType) {
-        return tag.name in this.stateTransitionTable
+    onText(text: string): StateTransition<EmitObject> | void {
+        this.text = this.text.concat(text)
     }
 
-    protected transitionUnexpectedTag(tag: TagType): StateTransition<TagType, EmitObject> {
-        if (this.unexpectedTagTransitionFunction) {
-            return this.unexpectedTagTransitionFunction(this, tag)
-        }
-        throw new Error("transitionUnexpectedTag called without transitionUnexpectedTagTransitionFunction being set to a valid instance.")
-    }
-
-    protected transitionExpectedTag(tag: TagType): StateTransition<TagType, EmitObject> {
-        return this.stateTransitionTable[tag.name](this, tag)
-    }
-
-    protected transitionFinishedState(): StateTransition<TagType, EmitObject> {
-        return this.transitionFinishedStateFunction()
+    onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
+        this.collector.onFeed(this.text)
     }
 }
