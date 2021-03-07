@@ -1,6 +1,6 @@
 /** Contains types to help build streaming parsers from XML data. */
 
-import { SaxesAttributeNS, SaxesTag, SaxesTagNS } from "saxes"
+import { CloseTagHandler, CommonOptions, OpenTagHandler, SaxesAttributeNS, SaxesOptions, SaxesParser, SaxesTag, SaxesTagNS, TextHandler } from "saxes"
 
 export type EmitObjectConstructor<T, EmitObject> = (data: T, attributes: Map<string, SaxesAttributeNS>) => EmitObject
 
@@ -68,6 +68,10 @@ export interface Collector<T> {
     onFeed(data: T): void;
 }
 
+export interface BaseParserStateConstructor<EmitObject> {
+    new (openTag: SaxesTagNS, parent?: BaseParserState<EmitObject>): BaseParserState<EmitObject>;
+}
+
 /**
  * Base class for ParserState objects.
  */
@@ -79,9 +83,9 @@ export abstract class BaseParserState<EmitObject> {
     protected readonly attributes: Map<string, SaxesAttributeNS>;
 
     /** The parser state to return to after this state is finished. */
-    protected parent: BaseParserState<EmitObject>;
+    protected parent?: BaseParserState<EmitObject>;
 
-    constructor(openTag: SaxesTagNS, parent: BaseParserState<EmitObject>) {
+    constructor(openTag: SaxesTagNS, parent?: BaseParserState<EmitObject>) {
         this.openTag = openTag
         this.parent = parent
 
@@ -150,5 +154,145 @@ export class ReturnTextParserState<EmitObject> extends BaseParserState<EmitObjec
 
     onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
         this.collector.onFeed(this.text)
+    }
+}
+
+export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {xmlns: true; fragment: true} = {xmlns: true; fragment: true}> {
+    /** The SAX parser. */
+    protected parser: SaxesParser<O>;
+
+    /**
+     * If true, the controller is in a preinit state. If false the controller has started parsing.
+     * 
+     * Once this is set to false. It is expected that state has a value and the openTag event handler on the parser is set to saxOpenTagHandler
+     **/
+    private _preinitState: boolean;
+
+    /**
+     * Constructs the first state once the first tag has been encountered.
+     */
+    protected initialStateConstructor: BaseParserStateConstructor<EmitObject>
+
+    /** The current parser state. */
+    protected state?: BaseParserState<EmitObject>;
+
+    protected emitDataHandler?: (data: EmitObject) => void
+    protected errorHandler?: (error: Error) => void
+
+    constructor(parserOptions: O, initalStateConstuctor: BaseParserStateConstructor<EmitObject>) {
+        this.parser = new SaxesParser<O>(parserOptions)
+        this.initialStateConstructor = initalStateConstuctor
+        this._preinitState = true
+
+        this.parser.on("error", this.saxErrorHandler)
+        this.parser.on("opentag", this.saxPreInitOpenTagHandler)
+    }
+
+    /**
+     * Set a handler for the emit event. This is called whenever the parser needs to emit data to the stream.
+     */
+    set onEmit(handler: (data: EmitObject) => void) {
+        this.emitDataHandler = handler
+    }
+
+    /**
+     * Set a handler for the error event. This is called whenever the parser throws an error.
+     */
+    set onError(handler: (error: Error) => void) {
+        this.errorHandler = handler
+    }
+
+    /**
+     * Tests if the controller has encountered the first tag and has started parsing.
+     */
+    get preInitState() {
+        return this._preinitState
+    }
+
+    /**
+     * Feeds a chunk of data to the parser.
+     */
+    feed(chunk: string | {} | null) {
+        this.parser.write(chunk)
+    }
+
+    /**
+     * Handler for error events from the sax parser.
+     */
+    protected saxErrorHandler(error: Error) {
+        if (this.errorHandler) {
+            this.errorHandler(error)
+        }
+    }
+
+    /**
+     * Handler for openTag Events from the sax parser.
+     */
+    protected saxOpenTagHandler(tag: SaxesTagNS) {
+        if (this.state) {
+            this.handleStateTransition(this.state.onOpenTag(tag))
+        }
+    }
+
+    /**
+     * Handler for text events from the sax parser.
+     */
+    protected saxTextHandler(text: string) {
+        if (this.state) {
+            this.handleStateTransition(this.state.onText(text))
+        }
+    }
+
+    /**
+     * Handler for close tag events from the sax parser.
+     */
+    protected saxCloseTagHandler(tag: SaxesTagNS) {
+        if (this.state) {
+            this.handleStateTransition(this.state.onCloseTag(tag))
+        }
+    }
+
+    /**
+     * Tests if the tag encountered is the first tag.
+     */
+    protected abstract isFirstTag(tag: SaxesTagNS): boolean
+
+    /**
+     * Handles the return values of ParserState events.
+     * @param stateTransition A StateTransition object or nothing, indicating that nothing should be done.
+     */
+    protected handleStateTransition(stateTransition: StateTransition<EmitObject> | void) {
+        if (stateTransition) {
+            this.state = stateTransition.newState
+            if (stateTransition.emitObject && this.emitDataHandler) {
+                this.emitDataHandler(stateTransition.emitObject)
+            }
+        }
+    }
+
+    private saxPreInitOpenTagHandler(tag: SaxesTagNS) {
+        if (this.isFirstTag(tag)) {
+            this._preinitState = false
+
+            this.state = new this.initialStateConstructor(tag)
+
+            this.parser.off("opentag")
+            this.parser.on("opentag", this.saxOpenTagHandler)
+            this.parser.on("text", this.saxTextHandler)
+            this.parser.on("closetag", this.saxCloseTagHandler)
+        }
+    }
+}
+
+export class SimpleXMLParserController<EmitObject> extends XMLParserController<EmitObject> {
+    public readonly firstTag: string
+
+    constructor(firstTag: string, initalStateConstuctor: BaseParserStateConstructor<EmitObject>) {
+        super({xmlns: true, fragment: true}, initalStateConstuctor)
+        this.firstTag = firstTag
+    }
+
+    isFirstTag(tag: SaxesTagNS): boolean {
+        return tag.name === this.firstTag
     }
 }
