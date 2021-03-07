@@ -143,10 +143,10 @@ export class TextParserState<EmitObject> extends BaseParserState<EmitObject> {
     protected emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>
 
     static parserStateFactory<EmitObject>(emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>): ParserStateFactoryRequiredParent<EmitObject> {
-        return (tag, parent) => new TextParserState<EmitObject>(emitObjectTextConstructor, tag, parent)
+        return (tag, parent) => new TextParserState<EmitObject>(tag, parent, emitObjectTextConstructor)
     }
 
-    constructor(emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>, openTag: SaxesTagNS, parent: BaseParserState<EmitObject>) {
+    constructor(openTag: SaxesTagNS, parent: BaseParserState<EmitObject>, emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>) {
         super(openTag, parent)
         this.emitObjectTextConstructor = emitObjectTextConstructor
         this.text = ""
@@ -167,12 +167,14 @@ export class TextParserState<EmitObject> extends BaseParserState<EmitObject> {
  * Similar to TextParserState, but feeds text to a collector instead of emitting it.
  */
 export class ReturnTextParserState<EmitObject> extends BaseParserState<EmitObject> {
-    protected collector: Collector<string>
+    protected collector: Collector<EmitObject>
+    protected emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>
     protected text: string
 
-    constructor(openTag: SaxesTagNS, collector: Collector<string>, parent: BaseParserState<EmitObject>) {
+    constructor(openTag: SaxesTagNS, parent: BaseParserState<EmitObject>, collector: Collector<EmitObject>, emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>) {
         super(openTag, parent)
         this.collector = collector
+        this.emitObjectTextConstructor = emitObjectTextConstructor
         this.text = ""
     }
 
@@ -181,7 +183,7 @@ export class ReturnTextParserState<EmitObject> extends BaseParserState<EmitObjec
     }
 
     onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
-        this.collector.onFeed(this.text)
+        this.collector.onFeed(this.emitObjectTextConstructor(this.text, this.attributes))
     }
 }
 
