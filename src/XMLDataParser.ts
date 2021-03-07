@@ -1,8 +1,9 @@
 /** Contains types to help build streaming parsers from XML data. */
 
-import { CloseTagHandler, CommonOptions, OpenTagHandler, SaxesAttributeNS, SaxesOptions, SaxesParser, SaxesTag, SaxesTagNS, TextHandler } from "saxes"
+import { SaxesAttributeNS, SaxesOptions, SaxesParser, SaxesTag, SaxesTagNS } from "saxes"
 
-export type EmitObjectConstructor<T, EmitObject> = (data: T, attributes: Map<string, SaxesAttributeNS>) => EmitObject
+export type EmitObjectFactory<T, EmitObject> = (data: T, attributes: Map<string, SaxesAttributeNS>) => EmitObject
+export type ParserStateFactory<EmitObject> = (openTag: SaxesTagNS, parent?: BaseParserState<EmitObject>) => BaseParserState<EmitObject>
 
 /**
  * Exception type for when an unexpected opentag is encountered while parsing.
@@ -112,17 +113,17 @@ export abstract class BaseParserState<EmitObject> {
 }
 
 export class GroupParserState<EmitObject> extends BaseParserState<EmitObject> {
-    protected transitionTable: Map<string, ParserStateConstructor<EmitObject>>
+    protected transitionTable: Map<string, ParserStateFactory<EmitObject>>
 
-    constructor(openTag: SaxesTagNS, transitionTable: Map<string, ParserStateConstructor<EmitObject>>, parent?: BaseParserState<EmitObject>) {
+    constructor(openTag: SaxesTagNS, transitionTable: Map<string, ParserStateFactory<EmitObject>>, parent?: BaseParserState<EmitObject>) {
         super(openTag, parent)
         this.transitionTable = transitionTable
     }
 
     onOpenTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
-        if (this.transitionTable.has(tag.name)) {
-            const Constructor = this.transitionTable.get(tag.name)!
-            return new StateTransition(new Constructor(tag, this))
+        const factory = this.transitionTable.get(tag.name)
+        if (factory) {
+            return new StateTransition(factory(tag, this))
         }
     }
 
@@ -138,9 +139,9 @@ export class GroupParserState<EmitObject> extends BaseParserState<EmitObject> {
  */
 export class TextParserState<EmitObject> extends BaseParserState<EmitObject> {
     protected text: string
-    protected emitObjectTextConstructor: EmitObjectConstructor<string, EmitObject>
+    protected emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>
 
-    constructor(openTag: SaxesTagNS, emitObjectTextConstructor: EmitObjectConstructor<string, EmitObject>, parent: BaseParserState<EmitObject>) {
+    constructor(openTag: SaxesTagNS, emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>, parent: BaseParserState<EmitObject>) {
         super(openTag, parent)
         this.emitObjectTextConstructor = emitObjectTextConstructor
         this.text = ""
@@ -193,7 +194,7 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
     /**
      * Constructs the first state once the first tag has been encountered.
      */
-    protected initialStateConstructor: ParserStateConstructor<EmitObject>
+    protected initialStateConstructor: ParserStateFactory<EmitObject>
 
     /** The current parser state. */
     protected state?: BaseParserState<EmitObject>;
@@ -201,7 +202,7 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
     protected emitDataHandler?: (data: EmitObject) => void
     protected errorHandler?: (error: Error) => void
 
-    constructor(parserOptions: O, initalStateConstuctor: ParserStateConstructor<EmitObject>) {
+    constructor(parserOptions: O, initalStateConstuctor: ParserStateFactory<EmitObject>) {
         this.parser = new SaxesParser<O>(parserOptions)
         this.initialStateConstructor = initalStateConstuctor
         this._preinitState = true
@@ -296,7 +297,7 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
         if (this.isFirstTag(tag)) {
             this._preinitState = false
 
-            this.state = new this.initialStateConstructor(tag)
+            this.state = this.initialStateConstructor(tag)
 
             this.parser.off("opentag")
             this.parser.on("opentag", this.saxOpenTagHandler)
@@ -309,8 +310,8 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
 export class SimpleXMLParserController<EmitObject> extends XMLParserController<EmitObject> {
     public readonly firstTag: string
 
-    constructor(firstTag: string, initalStateConstuctor: ParserStateConstructor<EmitObject>) {
-        super({xmlns: true, fragment: true}, initalStateConstuctor)
+    constructor(firstTag: string, initalStateConstuctor: ParserStateFactory<EmitObject>) {
+        super({ xmlns: true, fragment: true }, initalStateConstuctor)
         this.firstTag = firstTag
     }
 
