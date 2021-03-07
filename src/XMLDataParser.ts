@@ -4,6 +4,7 @@ import { SaxesAttributeNS, SaxesOptions, SaxesParser, SaxesTag, SaxesTagNS } fro
 
 export type EmitObjectFactory<T, EmitObject> = (data: T, attributes: Map<string, SaxesAttributeNS>) => EmitObject
 export type ParserStateFactory<EmitObject> = (openTag: SaxesTagNS, parent?: BaseParserState<EmitObject>) => BaseParserState<EmitObject>
+export type ParserStateFactoryRequiredParent<EmitObject> = (openTag: SaxesTagNS, parent: BaseParserState<EmitObject>) => BaseParserState<EmitObject>
 
 /**
  * Exception type for when an unexpected opentag is encountered while parsing.
@@ -113,9 +114,9 @@ export abstract class BaseParserState<EmitObject> {
 }
 
 export class GroupParserState<EmitObject> extends BaseParserState<EmitObject> {
-    protected transitionTable: Map<string, ParserStateFactory<EmitObject>>
+    protected transitionTable: Map<string, ParserStateFactoryRequiredParent<EmitObject>>
 
-    constructor(openTag: SaxesTagNS, transitionTable: Map<string, ParserStateFactory<EmitObject>>, parent?: BaseParserState<EmitObject>) {
+    constructor(openTag: SaxesTagNS, transitionTable: Map<string, ParserStateFactoryRequiredParent<EmitObject>>, parent?: BaseParserState<EmitObject>) {
         super(openTag, parent)
         this.transitionTable = transitionTable
     }
@@ -141,7 +142,11 @@ export class TextParserState<EmitObject> extends BaseParserState<EmitObject> {
     protected text: string
     protected emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>
 
-    constructor(openTag: SaxesTagNS, emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>, parent: BaseParserState<EmitObject>) {
+    static parserStateFactory<EmitObject>(emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>): ParserStateFactoryRequiredParent<EmitObject> {
+        return (tag, parent) => new TextParserState<EmitObject>(emitObjectTextConstructor, tag, parent)
+    }
+
+    constructor(emitObjectTextConstructor: EmitObjectFactory<string, EmitObject>, openTag: SaxesTagNS, parent: BaseParserState<EmitObject>) {
         super(openTag, parent)
         this.emitObjectTextConstructor = emitObjectTextConstructor
         this.text = ""
@@ -186,7 +191,6 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
 
     /**
      * If true, the controller is in a preinit state. If false the controller has started parsing.
-     * 
      * Once this is set to false. It is expected that state has a value and the openTag event handler on the parser is set to saxOpenTagHandler
      **/
     private _preinitState: boolean;

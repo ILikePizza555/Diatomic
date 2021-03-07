@@ -1,19 +1,33 @@
 import { Transformer } from "web-streams-polyfill/ponyfill"
-import { SaxesParser, SaxesTagNS } from "saxes"
-import { SyndicationDTO } from "./SyndicationDTO"
-import { BaseParserState } from "./XMLDataParser"
+import { SaxesTagNS } from "saxes"
+import { BaseParserState, GroupParserState, ParserStateFactoryRequiredParent, SimpleXMLParserController, StateTransition, TextParserState } from "./XMLDataParser"
+import { FeedData, SyndicationDTO } from "./SyndicationDTO"
 
+function buildInitialState(tag: SaxesTagNS, parent?: BaseParserState<SyndicationDTO>) {
+    const transitionTable = new Map([["channel", buildChannelElementState]])
+    return new GroupParserState(tag, transitionTable, parent)
+}
+
+function buildChannelElementState(tag: SaxesTagNS, parent?: BaseParserState<SyndicationDTO>) {
+    /* eslint no-multi-spaces: "off" */
+    const transitionTable = new Map<string, ParserStateFactoryRequiredParent<SyndicationDTO>>([
+        ["title",           TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ title: text }))],
+        ["link",            TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ link: text }))],
+        ["description",     TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ description: text }))],
+        ["language",        TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ language: text }))],
+        ["copyright",       TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ copyright: text }))],
+        ["category",        TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ category: text }))],
+        ["pubDate",         TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ pubDate: new Date(text) }))],
+        ["lastBuildDate",   TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ lastBuildDate: new Date(text) }))],
+        ["ttl",             TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ ttl: parseInt(text) }))]
+    ])
+    return new GroupParserState(tag, transitionTable, parent)
+}
 
 /**
  * Parser state that parses the channel tag.
  */
-class ChannelElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedObject> {
-    public readonly stateName = "channel"
-
-    constructor() {
-        super("channel")
-    }
-
+class ChannelElementState extends BaseParserState<SyndicationDTO> {
     protected isAllowedTag(tag: SaxesTagNS): boolean {
         return isChannelDataKey(tag.name) || tag.name === "item"
     }
@@ -71,7 +85,7 @@ class ItemElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedObjec
 }
 
 export class RSSParserTransformer implements Transformer<string, FeedObject> {
-    
+    private controller = new SimpleXMLParserController("rss", )
 
     start(controller: TransformStreamDefaultController<FeedObject>) {
         // Setup callbacks
