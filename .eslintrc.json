@@ -16,7 +16,8 @@
         "quotes": ["error", "double", {"allowTemplateLiterals": true}],
         "space-before-function-paren": ["error", "never"],
         "new-cap": ["error", {"newIsCapExceptionPattern": "^this.*"}],
-        "@typescript-eslint/no-empty-function": "off"
+        "@typescript-eslint/no-empty-function": "off",
+        "@typescript-eslint/no-use-before-define": "off"
     },
     "overrides": [
         {
