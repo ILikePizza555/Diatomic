@@ -18,16 +18,16 @@ export interface FeedData {
 }
 
 export interface ItemData {
-    title: string;
-    link: string;
-    description: string;
-    author: string;
-    category: string;
-    comments: string;
-    enclosure: {url: string; length: number; type: MimeType};
-    guid: string;
-    pubDate: Date;
-    source: {url: string; name: string};
+    title?: string;
+    link?: string;
+    description?: string;
+    author?: string;
+    category?: string;
+    comments?: string;
+    enclosure?: {url: string; length: number; type: string};
+    guid?: string;
+    pubDate?: Date;
+    source?: {url: string; name: string};
 }
 
 export type SyndicationDTO = Partial<FeedData> | ItemData

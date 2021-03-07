@@ -1,7 +1,7 @@
 import { Transformer } from "web-streams-polyfill/ponyfill"
 import { SaxesTagNS } from "saxes"
-import { BaseParserState, GroupParserState, ParserStateFactoryRequiredParent, SimpleXMLParserController, StateTransition, TextParserState } from "./XMLDataParser"
-import { FeedData, SyndicationDTO } from "./SyndicationDTO"
+import { BaseParserState, Collector, GroupParserState, ParserStateFactoryRequiredParent, ReturnTextParserState, SimpleXMLParserController, StateTransition, TextParserState } from "./XMLDataParser"
+import { SyndicationDTO, ItemData } from "./SyndicationDTO"
 
 function buildInitialState(tag: SaxesTagNS, parent?: BaseParserState<SyndicationDTO>) {
     const transitionTable = new Map([["channel", buildChannelElementState]])
@@ -19,114 +19,76 @@ function buildChannelElementState(tag: SaxesTagNS, parent?: BaseParserState<Synd
         ["category",        TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ category: text }))],
         ["pubDate",         TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ pubDate: new Date(text) }))],
         ["lastBuildDate",   TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ lastBuildDate: new Date(text) }))],
-        ["ttl",             TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ ttl: parseInt(text) }))]
+        ["ttl",             TextParserState.parserStateFactory<SyndicationDTO>((text) => ({ ttl: parseInt(text) }))],
+        ["item",            (openTag, parent) => new ItemElementState(openTag, parent)]
     ])
     return new GroupParserState(tag, transitionTable, parent)
 }
 
-/**
- * Parser state that parses the channel tag.
- */
-class ChannelElementState extends BaseParserState<SyndicationDTO> {
-    protected isAllowedTag(tag: SaxesTagNS): boolean {
-        return isChannelDataKey(tag.name) || tag.name === "item"
+class ItemElementState extends BaseParserState<SyndicationDTO> {
+    private _collector = new ItemCollector()
+
+    onOpenTag(tag: SaxesTagNS): StateTransition<SyndicationDTO> | void {
+        if (tag.name === "enclosure") {
+            return this.createEnclosureStateTransition(tag)
+        }
+
+        if (tag.name === "source") {
+            return this.createSourceStateTransition(tag)
+        }
+
+        return new StateTransition(new ReturnTextParserState<ItemData>(tag, this, this._collector, (text) => {
+            return { [tag.name]: text }
+        }))
     }
 
-    // We can add the additional type constraint here because isAllowedTag checks for this already.
-    protected transitionExpectedTag(tag: SaxesTagNS & { name: keyof ChannelData | "item" } ): StateTransition<SaxesTagNS, FeedObject> {
-        if (tag.name === "item") {
-            
+    onCloseTag() {
+        if (this.parent) {
+            return new StateTransition(this.parent, this._collector.itemData)
         }
-        
-        if (tag.name === "ttl") {
-            const tagName = tag.name
-            return new StateTransition(new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, parseInt(t))))
-        }
-
-        if (tag.name === "lastBuildDate" || tag.name === "pubDate") {
-            const tagName = tag.name
-            const nextState = new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, new Date(t)))
-            return new StateTransition(nextState)
-        }
-
-        const tagName = tag.name
-        return new StateTransition(new SimpleTextParserState(tag.name, this, t => createChannelDataFeedObject(tagName, t)))
     }
 
-    protected transitionFinishedState(): StateTransition<SaxesTagNS, FeedObject> {
-        // Return to a new RootElementState, effectively resetting the parser.
-        return new StateTransition(new RootElementState())
+    private createEnclosureStateTransition(tag: SaxesTagNS): StateTransition<ItemData> {
+        const newState = new ReturnTextParserState<ItemData>(tag, this, this._collector, (_, attr) => {
+            const url = assertExists(attr.get("url")?.value, "attr.get('url')")
+            const length = assertExists(attr.get("length")?.value, "attr.get('length')")
+            const type = assertExists(attr.get("type")?.value, "attr.get('type')")
+
+            return { enclosure: { url: url, length: parseInt(length), type: type } }
+        })
+
+        return new StateTransition(newState)
+    }
+
+    private createSourceStateTransition(tag: SaxesTagNS): StateTransition<ItemData> {
+        const newState = new ReturnTextParserState<ItemData>(tag, this, this._collector, (_, attr) => {
+            const url = assertExists(attr.get("url")?.value, "attr.get('url')")
+            const name = assertExists(attr.get("name")?.value, "attr.get('name')")
+
+            return { source: { url: url, name: name } }
+        })
+
+        return new StateTransition(newState)
     }
 }
 
-class ItemElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedObject> {
-    public readonly stateName = "item"
+class ItemCollector implements Collector<ItemData> {
+    itemData: ItemData = {}
 
-    private previousState: ChannelElementState
-    private itemData: ItemData = {}
-
-    constructor(previousState: ChannelElementState) {
-        super("item")
-        this.beginParse = true
-        this.previousState = previousState
-    }
-
-    protected isAllowedTag(tag: SaxesTagNS): boolean {
-        return isItemDataKey(tag.name)
-    }
-
-    protected transitionExpectedTag(tag: SaxesTagNS & { name: keyof ItemData}): StateTransition<SaxesTagNS, FeedObject> {
-        
-    }
-
-    protected transitionFinishedState(): StateTransition<SaxesTagNS, FeedObject> {
-        return new StateTransition(this.previousState, {item: this.itemData})
+    onFeed(data: ItemData) {
+        this.itemData = { ...this.itemData, ...data }
     }
 }
 
-export class RSSParserTransformer implements Transformer<string, FeedObject> {
-    private controller = new SimpleXMLParserController("rss", )
+export class RSSParserTransformer implements Transformer<string, SyndicationDTO> {
+    private parserController = new SimpleXMLParserController("rss", buildInitialState)
 
-    start(controller: TransformStreamDefaultController<FeedObject>) {
-        // Setup callbacks
-        this._parser.on("error", err => {
-            this._error = err
-            controller.error(err)
-        })
-
-        this._parser.on("opentag", tag => {
-            if (this.state.opentagHandler) {
-                const handlerResult = this.state.opentagHandler(tag)
-                this.handleStateTransition(controller, handlerResult)
-            }
-        })
-
-        this._parser.on("closetag", tag => {
-            if (this.state.closetagHandler) {
-                const handlerResult = this.state.closetagHandler(tag)
-                this.handleStateTransition(controller, handlerResult)
-            }
-        })
-
-        this._parser.on("text", text => {
-            if (this.state.textHandler) {
-                const handlerResult = this.state.textHandler(text)
-                this.handleStateTransition(controller, handlerResult)
-            }
-        })
+    start(controller: TransformStreamDefaultController<SyndicationDTO>) {
+        this.parserController.onError = controller.error
+        this.parserController.onEmit = controller.enqueue
     }
 
-    transform(chunk: string, controller: TransformStreamDefaultController<FeedObject>) {
-        this._parser.write(chunk)
-    }
-
-    private handleStateTransition(controller: TransformStreamDefaultController<FeedObject>, stateTransition: StateTransition<SaxesTagNS, FeedObject> | void) {
-        if (stateTransition) {
-            this.state = stateTransition.newState
-
-            if (stateTransition.emitObject) {
-                controller.enqueue(stateTransition.emitObject)
-            }
-        }
+    transform(chunk: string, controller: TransformStreamDefaultController<SyndicationDTO>) {
+        this.parserController.feed(chunk)
     }
 }
