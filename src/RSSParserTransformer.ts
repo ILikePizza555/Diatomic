@@ -88,7 +88,7 @@ export class RSSParserTransformer implements Transformer<string, SyndicationDTO>
         this.parserController.onEmit = controller.enqueue
     }
 
-    transform(chunk: string, controller: TransformStreamDefaultController<SyndicationDTO>) {
+    transform(chunk: string) {
         this.parserController.feed(chunk)
     }
 }
