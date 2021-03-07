@@ -1,69 +1,8 @@
 import { Transformer } from "web-streams-polyfill/ponyfill"
 import { SaxesParser, SaxesTagNS } from "saxes"
-import { AbstractGroupTagParserState, AbstractTagParserState, MissingXMLTagError, SimpleTextParserState, StateTransition, XMLParseEventHandlers } from "./XMLDataParser"
+import { SyndicationDTO } from "./SyndicationDTO"
+import { BaseParserState } from "./XMLDataParser"
 
-/** Union types of the objects emitted by the parser. */
-type FeedObject = {channel: ChannelData} | {item: ItemData}
-
-interface ChannelData {
-    title?: string;
-    link?: string;
-    description?: string;
-    language?: string;
-    copyright?: string;
-    managingEditor?: string;
-    webMaster?: string;
-    pubDate?: Date;
-    lastBuildDate?: Date;
-    category?: string;
-    generator?: string;
-    cloud?: string;
-    ttl?: number;
-}
-
-interface ItemData {
-    title?: string;
-    link?: string;
-    description?: string;
-    author?: string;
-    category?: string;
-    comments?: string;
-    enclosure?: {url: string; length: number; type: MimeType};
-    guid?: string;
-    pubDate?: Date;
-    source?: {url: string, name: string}
-}
-
-function isChannelDataKey(testString: string): testString is keyof ChannelData {
-    return /title|link|description|language|copyright|managingEditor|webMaster|pubDate|lastBuildDate|category|generator|cloud|ttl/.test(testString)
-}
-
-function isItemDataKey(testString: string): testString is keyof ItemData {
-    return /title|link|description|language|author|category|comments|enclosure|guid|pubDate|source/.test(testString)
-}
-
-function createChannelDataFeedObject<K extends keyof ChannelData, T extends Required<ChannelData>[K]>(key: K, value: T): { channel: ChannelData } {
-    return {
-        channel: {
-            [key]: value
-        }
-    }
-}
-
-/**
- * Verifies that the first tag of a feed is valid for the RSS standard.
- */
-class RootElementState implements XMLParseEventHandlers<SaxesTagNS, FeedObject> {
-    public readonly stateName = "root"
-
-    opentagHandler(tag: SaxesTagNS): StateTransition<SaxesTagNS, FeedObject> {
-        if (tag.name !== "rss") {
-            throw new MissingXMLTagError(`Feed does not begin with tag named "rss", instead got "${tag.name}"`)
-        }
-
-        return new StateTransition(new ChannelElementState())
-    }
-}
 
 /**
  * Parser state that parses the channel tag.
@@ -132,11 +71,7 @@ class ItemElementState extends AbstractGroupTagParserState<SaxesTagNS, FeedObjec
 }
 
 export class RSSParserTransformer implements Transformer<string, FeedObject> {
-    private _parser = new SaxesParser({ xmlns: true, fragments: true });
-
-    private _error?: Error;
-
-    private state: XMLParseEventHandlers<SaxesTagNS, FeedObject> = new RootElementState();
+    
 
     start(controller: TransformStreamDefaultController<FeedObject>) {
         // Setup callbacks
