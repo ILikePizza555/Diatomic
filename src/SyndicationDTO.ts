@@ -5,16 +5,16 @@ export interface FeedData {
     title: string;
     link: string;
     description: string;
-    language: string;
-    copyright: string;
-    managingEditor: string;
-    webMaster: string;
-    pubDate: Date;
-    lastBuildDate: Date;
-    category: string;
-    generator: string;
-    cloud: string;
-    ttl: number;
+    language?: string;
+    copyright?: string;
+    /* managingEditor: string;
+    webMaster: string; */
+    pubDate?: Date;
+    lastBuildDate?: Date;
+    category?: string;
+    generator?: string;
+    cloud?: string;
+    ttl?: number;
 }
 
 export interface ItemData {
@@ -30,4 +30,4 @@ export interface ItemData {
     source: {url: string; name: string};
 }
 
-export type SyndicationDTO = FeedData | ItemData
+export type SyndicationDTO = Partial<FeedData> | ItemData
