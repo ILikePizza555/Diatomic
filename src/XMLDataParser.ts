@@ -68,7 +68,7 @@ export interface Collector<T> {
     onFeed(data: T): void;
 }
 
-export interface BaseParserStateConstructor<EmitObject> {
+export interface ParserStateConstructor<EmitObject> {
     new (openTag: SaxesTagNS, parent?: BaseParserState<EmitObject>): BaseParserState<EmitObject>;
 }
 
@@ -109,6 +109,28 @@ export abstract class BaseParserState<EmitObject> {
      * Can return a StateTransition object to emit an object and switch state.
      */
     abstract onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void
+}
+
+export class GroupParserState<EmitObject> extends BaseParserState<EmitObject> {
+    protected transitionTable: Map<string, ParserStateConstructor<EmitObject>>
+
+    constructor(openTag: SaxesTagNS, transitionTable: Map<string, ParserStateConstructor<EmitObject>>, parent?: BaseParserState<EmitObject>) {
+        super(openTag, parent)
+        this.transitionTable = transitionTable
+    }
+
+    onOpenTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
+        if (this.transitionTable.has(tag.name)) {
+            const Constructor = this.transitionTable.get(tag.name)!
+            return new StateTransition(new Constructor(tag, this))
+        }
+    }
+
+    onCloseTag(tag: SaxesTagNS): StateTransition<EmitObject> | void {
+        if (this.parent) {
+            return new StateTransition(this.parent)
+        }
+    }
 }
 
 /**
@@ -171,7 +193,7 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
     /**
      * Constructs the first state once the first tag has been encountered.
      */
-    protected initialStateConstructor: BaseParserStateConstructor<EmitObject>
+    protected initialStateConstructor: ParserStateConstructor<EmitObject>
 
     /** The current parser state. */
     protected state?: BaseParserState<EmitObject>;
@@ -179,7 +201,7 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
     protected emitDataHandler?: (data: EmitObject) => void
     protected errorHandler?: (error: Error) => void
 
-    constructor(parserOptions: O, initalStateConstuctor: BaseParserStateConstructor<EmitObject>) {
+    constructor(parserOptions: O, initalStateConstuctor: ParserStateConstructor<EmitObject>) {
         this.parser = new SaxesParser<O>(parserOptions)
         this.initialStateConstructor = initalStateConstuctor
         this._preinitState = true
@@ -287,7 +309,7 @@ export abstract class XMLParserController<EmitObject, O extends SaxesOptions & {
 export class SimpleXMLParserController<EmitObject> extends XMLParserController<EmitObject> {
     public readonly firstTag: string
 
-    constructor(firstTag: string, initalStateConstuctor: BaseParserStateConstructor<EmitObject>) {
+    constructor(firstTag: string, initalStateConstuctor: ParserStateConstructor<EmitObject>) {
         super({xmlns: true, fragment: true}, initalStateConstuctor)
         this.firstTag = firstTag
     }
