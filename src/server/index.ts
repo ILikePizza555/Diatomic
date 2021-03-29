@@ -1,6 +1,11 @@
 import fastify from "fastify"
 import fastifyCookie from "fastify-cookie"
+import fastifyStatic from "fastify-static"
+
+import * as path from "path"
+
 import "make-promises-safe"
+import { request } from "node:http"
 
 const server = fastify({
     logger: true
@@ -10,7 +15,11 @@ const server = fastify({
 server.register(fastifyCookie)
 
 server.get("/", async (request, reply) => {
-    return "Hello World!"
+    return reply.sendFile("index.html")
+})
+
+server.get("/bundle.js", async (request, reply) => {
+    return reply.sendFile("bundle.js")
 })
 
 server.listen(3000).catch(err => {
