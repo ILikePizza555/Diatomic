@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build:server": "tsc --project src/server/tsconfig.json --outDir dist/",
+    "build:client": "webpack",
     "start:server": "node dist/index.js"
   },
   "repository": {
