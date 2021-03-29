@@ -1,7 +1,7 @@
 import fastify from "fastify"
 import fastifyCookie from "fastify-cookie"
-import fastifyStatic from "fastify-static"
 
+import * as fs from "fs"
 import * as path from "path"
 
 import "make-promises-safe"
@@ -14,12 +14,16 @@ const server = fastify({
 // TODO: Properly set a secret here as an option once we get settings implemented.
 server.register(fastifyCookie)
 
-server.get("/", async (request, reply) => {
-    return reply.sendFile("index.html")
+server.get("/", (request, reply) => {
+    const fileStream = fs.createReadStream("index.html", "utf8")
+    reply.header("Content-Type", "text/html")
+    reply.send(fileStream)
 })
 
-server.get("/bundle.js", async (request, reply) => {
-    return reply.sendFile("bundle.js")
+server.get("/bundle.js", (request, reply) => {
+    const fileStream = fs.createReadStream("bundle.js", "utf8")
+    reply.header("Content-Type", "application/javascript")
+    reply.send(fileStream)
 })
 
 server.listen(3000).catch(err => {
