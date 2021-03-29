@@ -4,7 +4,8 @@
   "description": "A feed reader for the modern web",
   "main": "index.js",
   "scripts": {
-    "build:server": "tsc --project src/server/tsconfig.json --outDir dist/"
+    "build:server": "tsc --project src/server/tsconfig.json --outDir dist/",
+    "start:server": "node dist/index.js"
   },
   "repository": {
     "type": "git",
