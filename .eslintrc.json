@@ -1,11 +1,27 @@
 {
-    "root": true,
-    "parser": "@typescript-eslint/paser",
+    "parser": "@typescript-eslint/parser",
+    "parserOptions": {
+        "project": [
+            "./src/client/tsconfig.json",
+            "./src/server/tsconfig.json"
+        ]
+    },
     "plugins": [
         "@typescript-eslint"
     ],
     "extends": [
-        "eslint:recommended",
-        "plugin:@typescript-eslint/recommended"
-    ]
+        "eslint-config-standard-with-typescript"
+    ],
+    "rules": {
+        "indent": ["error", 4],
+        "@typescript-eslint/indent": ["error", 4],
+
+        "quotes": ["error", "double"],
+        "@typescript-eslint/quotes": ["error", "double"],
+
+        "space-before-function-paren": "off",
+        "@typescript-eslint/space-before-function-paren": "off",
+
+        "eol-last": "off"
+    }
 }
