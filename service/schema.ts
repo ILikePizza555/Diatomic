@@ -1,5 +1,4 @@
 import { Knex, knex } from "knex"
-import { Url } from "node:url"
 import * as uuid from "uuid"
 
 export const UserTable = Object.freeze({
@@ -43,12 +42,12 @@ export const FeedTable = Object.freeze({
         table.timestamps()
     },
     createRow: function(title: string,
-                        url: Url,
-                        uuidStr: string = uuid.v4(), 
-                        homePageURL?: Url,
+                        url: URL,
                         description?: string,
-                        iconUrl?: Url,
-                        faviconUrl?: Url) {
+                        homePageURL?: URL,
+                        iconUrl?: URL,
+                        faviconUrl?: URL,
+                        uuidStr: string = uuid.v4()) {
         if (!uuid.validate(uuidStr)) {
             throw new Error(`uuidStr ("${uuidStr}") is not a valid UUID.`)
         }
