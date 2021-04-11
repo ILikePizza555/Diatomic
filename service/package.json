@@ -10,7 +10,8 @@
   "license": "AGPL-3.0-or-later",
   "dependencies": {
     "argon2": "^0.27.2",
-    "knex": "^0.95.4"
+    "knex": "^0.95.4",
+    "uuid": "^8.3.2"
   },
   "optionalDependencies": {
     "mysql": "^2.18.1",
