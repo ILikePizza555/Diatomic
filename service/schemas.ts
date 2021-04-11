@@ -1,61 +1,86 @@
-import { Knex } from "knex"
+import { Knex, knex } from "knex"
 
-export const UserTableName = "users"
-export const FeedTableName = "feeds"
-export const FeedItemTableName = "feed_items"
-export const SubscriptionTableName = "subscriptions"
+export const UserTable = Object.freeze({
+    name: "users",
+    columnNames: Object.freeze({
+        id: "user_id",
+        username: "username",
+        email: "email",
+        password: "password",
+        salt: "salt"
+    }),
+    buildTable: function(table: Knex.CreateTableBuilder) {
+        table.uuid(this.columnNames.id).unique().primary()
+        table.string(this.columnNames.username)
+        table.string(this.columnNames.email)
+        table.string(this.columnNames.password)
+        table.string(this.columnNames.salt)
+        table.timestamps()
+    }
+})
 
-const UserColumnId = "user_id"
-const UserColumnUsername = "username"
-const UserColumnEmail = "email"
-const UserColumnPassword = "password"
-const UserColumnSalt = "salt"
+export const FeedTable = Object.freeze({
+    name: "feeds",
+    columnNames: Object.freeze({
+        id: "feed_id",
+        title: "title",
+        url: "feed_url",
+        homePageURL: "home_page_url",
+        description: "description",
+        icon: "icon_url",
+        favicon: "favicon_url",
+    }),
+    buildTable: function(table: Knex.CreateTableBuilder) {
+        table.uuid(this.columnNames.id).unique().primary()
+        table.text(this.columnNames.title).notNullable()
+        table.text(this.columnNames.url).notNullable()
+        table.text(this.columnNames.homePageURL)
+        table.text(this.columnNames.description)
+        table.text(this.columnNames.icon)
+        table.text(this.columnNames.favicon)
+        table.timestamps()
+    }
+})
 
-const FeedColumnId = "feed_id"
-const FeedColumnTitle = "title"
-const FeedColumnUrl = "feed_url"
-const FeedColumnHomePageURL = "home_page_url"
-const FeedColumnDescription = "description"
-const FeedColumnIcon = "icon_url"
-const FeedColumnFavicon = "favicon_url"
+export const FeedItemTable = Object.freeze({
+    name: "feed_items",
+    columnNames: Object.freeze({
+        id: "item_id",
+        feedFk: "feed_id",
+        feedJson: "item_json",
+    }),
+    buildTable: function(table: Knex.CreateTableBuilder) {
+        table.uuid(this.columnNames.id).unique().primary()
+        table.uuid(this.columnNames.feedFk).references(FeedTable.columnNames.id).inTable(FeedTable.name)
+        table.json(this.columnNames.feedJson)
+        table.timestamps()
+    }
+})
 
-const FeedItemColumnId = "item_id"
-const FeedItemColumnFK = "feed_id"
-const FeedItemColumnJson = "item_json"
-
-const SubscriptionColumnUserIdFK = "user_id"
-const SubscriptionColumnFeedIdFK = "feed_id"
+export const SubscriptionTable = Object.freeze({
+    name: "subscriptions",
+    columnNames: Object.freeze({
+        userIdFK: "user_id",
+        feedIdFK: "feed_id"
+    }),
+    buildTable: function(table: Knex.CreateTableBuilder) {
+        table.comment("Models the user to feed relationship.")
+        table.uuid(this.columnNames.userIdFK)
+             .unique()
+             .references(UserTable.columnNames.id)
+             .inTable(UserTable.name)
+        table.uuid(this.columnNames.feedIdFK)
+             .unique()
+             .references(FeedTable.columnNames.id)
+             .inTable(FeedTable.name)
+        table.timestamps()
+    }
+})
 
 export function CreateSchema(knex: Knex) {
     return knex.schema
-        .createTable(UserTableName, table => {
-            table.uuid(UserColumnId).unique().primary()
-            table.string(UserColumnUsername)
-            table.string(UserColumnEmail)
-            table.string(UserColumnPassword)
-            table.string(UserColumnSalt)
-            table.timestamps()
-        })
-        .createTable(FeedTableName, table => {
-            table.uuid(FeedColumnId).unique().primary()
-            table.text(FeedColumnTitle).notNullable()
-            table.text(FeedColumnUrl).notNullable()
-            table.text(FeedColumnHomePageURL)
-            table.text(FeedColumnDescription)
-            table.text(FeedColumnIcon)
-            table.text(FeedColumnFavicon)
-            table.timestamps()
-        })
-        .createTable(FeedItemTableName, table => {
-            table.uuid(FeedItemColumnId).unique().primary()
-            table.uuid(FeedItemColumnFK).references(FeedColumnId).inTable(FeedTableName)
-            table.json(FeedItemColumnJson)
-            table.timestamps()
-        })
-        .createTable(SubscriptionTableName, table => {
-            table.comment("Models the user to feed relationship.")
-            table.uuid(SubscriptionColumnUserIdFK).unique().references(UserColumnId).inTable(UserTableName)
-            table.uuid(SubscriptionColumnFeedIdFK).unique().references(FeedColumnId).inTable(FeedTableName)
-            table.timestamp("created_at").defaultTo(knex.fn.now())
-        })
+        .createTable(UserTable.name, UserTable.buildTable)
+        .createTable(FeedTable.name, FeedTable.buildTable)
+        .createTable(FeedItemTable.name, FeedItemTable.buildTable)
+        .createTable(SubscriptionTable.name, SubscriptionTable.buildTable)
 }
