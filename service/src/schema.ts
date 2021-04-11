@@ -1,6 +1,8 @@
 import { Knex, knex } from "knex"
 import * as uuid from "uuid"
 
+
+
 export const UserTable = Object.freeze({
     name: "users",
     columnNames: Object.freeze({
