@@ -76,6 +76,17 @@ export const FeedItemTable = Object.freeze({
         table.uuid(this.columnNames.feedFk).references(FeedTable.columnNames.id).inTable(FeedTable.name)
         table.json(this.columnNames.feedJson)
         table.timestamps()
+    },
+    createRow: function(feedItemId: string, itemData: any, uuidStr: string = uuid.v4()) {
+        if (!uuid.validate(uuidStr)) {
+            throw new Error(`uuidStr ("${uuidStr}") is not a valid UUID.`)
+        }
+
+        return {
+            [this.columnNames.id]: uuidStr,
+            [this.columnNames.feedFk]: feedItemId,
+            [this.columnNames.feedJson]: itemData
+        }
     }
 })
 
