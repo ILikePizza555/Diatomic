@@ -56,5 +56,6 @@ export function CreateSchema(knex: Knex) {
             table.comment("Models the user to feed relationship.")
             table.uuid(SubscriptionColumnUserIdFK).unique().references(UserColumnId).inTable(UserTableName)
             table.uuid(SubscriptionColumnFeedIdFK).unique().references(FeedColumnId).inTable(FeedTableName)
+            table.timestamp("created_at").defaultTo(knex.fn.now())
         })
 }
