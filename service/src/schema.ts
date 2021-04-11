@@ -133,7 +133,7 @@ export class FeedItemModel {
                 modified_at: Date = new Date()) {
         this.feeditem_id = feeditem_id
         this.feed_id = feed_id
-        this.feeditem_json
+        this.feeditem_json = feeditem_json
         this.created_at = created_at
         this.modified_at = modified_at
     }
