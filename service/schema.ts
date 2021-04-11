@@ -1,4 +1,6 @@
 import { Knex, knex } from "knex"
+import { Url } from "node:url"
+import * as uuid from "uuid"
 
 export const UserTable = Object.freeze({
     name: "users",
@@ -39,6 +41,27 @@ export const FeedTable = Object.freeze({
         table.text(this.columnNames.icon)
         table.text(this.columnNames.favicon)
         table.timestamps()
+    },
+    createRow: function(title: string,
+                        url: Url,
+                        uuidStr: string = uuid.v4(), 
+                        homePageURL?: Url,
+                        description?: string,
+                        iconUrl?: Url,
+                        faviconUrl?: Url) {
+        if (!uuid.validate(uuidStr)) {
+            throw new Error(`uuidStr ("${uuidStr}") is not a valid UUID.`)
+        }
+
+        return {
+            [this.columnNames.id]: uuidStr,
+            [this.columnNames.title]: title,
+            [this.columnNames.url]: url.href,
+            [this.columnNames.homePageURL]: homePageURL?.href,
+            [this.columnNames.description]: description,
+            [this.columnNames.icon]: iconUrl?.href,
+            [this.columnNames.favicon]: faviconUrl?.href
+        }
     }
 })
 
@@ -79,8 +102,8 @@ export const SubscriptionTable = Object.freeze({
 
 export function CreateSchema(knex: Knex) {
     return knex.schema
-        .createTable(UserTable.name, UserTable.buildTable)
-        .createTable(FeedTable.name, FeedTable.buildTable)
-        .createTable(FeedItemTable.name, FeedItemTable.buildTable)
-        .createTable(SubscriptionTable.name, SubscriptionTable.buildTable)
+        .createTableIfNotExists(UserTable.name, UserTable.buildTable)
+        .createTableIfNotExists(FeedTable.name, FeedTable.buildTable)
+        .createTableIfNotExists(FeedItemTable.name, FeedItemTable.buildTable)
+        .createTableIfNotExists(SubscriptionTable.name, SubscriptionTable.buildTable)
 }
