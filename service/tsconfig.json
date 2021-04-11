@@ -2,7 +2,8 @@
     "compilerOptions": {
         "module": "commonjs",
         "target": "ES2019",
-        "outDir": "dist"
+        "outDir": "dist",
+        "strict": true
     },
     "exclude": [
         "node_modules"
