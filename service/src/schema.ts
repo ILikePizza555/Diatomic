@@ -1,4 +1,19 @@
-import { Knex, knex } from "knex"
+/**
+ * This module defines classes for interacting with the database. Due to typescript limitatations and a lack of 
+ * metaprogramming, many of these classes have invariants that cannot be typechecked.
+ * 
+ * The two main kinds of classes this module exposes are Models and Repositories. 
+ * 
+ * Models are primarily data-transfer objects. They store data in an organization and format that makes sense before writing 
+ * to the database and after reading from the database. The primary constraint of a model is that a public field's name 
+ * should correspond to the name of a column on a table in the database. In the future, we may relax this constraint by 
+ * implementing a static`GetColumnName` method that maps a field to a column name.
+ * 
+ * Repositories are responsible for defining the interaction between the rest of the app and the database.
+ * Read and write operations, the database schema, and any queries are defined inside of a repository.
+ * Repositories are also responsible for data validation and ensuring that all constraints are met. 
+ */
+import { Knex } from "knex"
 import * as uuid from "uuid"
 
 const nameof = <T>(name: Extract<keyof T, string>): string => name
@@ -115,6 +130,10 @@ export class FeedRepository {
             })
         }
     }
+
+    async insertSingle(feed: FeedModel) {
+        await this._db(FeedModel.TableName).insert(feed)
+    }
 }
 
 export class FeedItemModel {
@@ -160,6 +179,14 @@ export class FeedItemRepository {
                 table.timestamps()
             })
         }
+    }
+
+    async insertSingle(feedItemModel: FeedItemModel) {
+        await this._db(FeedItemModel.TableName).insert(feedItemModel)
+    }
+
+    async insertMany(feedItemModels: FeedItemModel[]) {
+        await this._db(FeedItemModel.TableName).insert(feedItemModels)
     }
 }
 
