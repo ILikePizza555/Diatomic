@@ -260,3 +260,36 @@ export class SubscriptionRepository {
         }
     }
 }
+
+export class RepositoryDepot {
+    user: UserRepository
+    feed: FeedRepository
+    feedItem: FeedItemRepository
+    subscription: SubscriptionRepository
+
+    static FromDatabase(db: Knex) {
+        return new RepositoryDepot(
+            new UserRepository(db),
+            new FeedRepository(db),
+            new FeedItemRepository(db),
+            new SubscriptionRepository(db)
+        )
+    }
+
+    constructor(userRepository: UserRepository,
+                feedRepository: FeedRepository,
+                feedItemRepository: FeedItemRepository,
+                subscriptionRepository: SubscriptionRepository) {
+        this.user = userRepository
+        this.feed = feedRepository
+        this.feedItem = feedItemRepository
+        this.subscription = subscriptionRepository
+    }
+
+    async setupSchemas() {
+        await this.user.createTableInSchema()
+        await this.feed.createTableInSchema()
+        await this.feedItem.createTableInSchema()
+        await this.subscription.createTableInSchema()
+    }
+}
