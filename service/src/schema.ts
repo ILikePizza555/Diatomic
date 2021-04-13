@@ -1,6 +1,6 @@
 /**
  * This module defines classes for interacting with the database. Due to typescript limitatations and a lack of 
- * metaprogramming, many of these classes have invariants that cannot be typechecked.
+ * metaprogramming, many of these classes have constraints that cannot be typechecked.
  * 
  * The two main kinds of classes this module exposes are Models and Repositories. 
  * 
@@ -17,6 +17,8 @@ import { Knex } from "knex"
 import * as uuid from "uuid"
 
 const nameof = <T>(name: Extract<keyof T, string>): string => name
+
+type Nullable<T> = T | null
 export class UserModel {
     static readonly TableName = "users"
 
@@ -26,7 +28,7 @@ export class UserModel {
     password: string
     salt: string
     created_at: Date
-    modified_at: Date
+    updated_at: Date
 
     constructor(user_id: string,
                 username: string,
@@ -34,14 +36,14 @@ export class UserModel {
                 password: string,
                 salt: string,
                 created_at: Date,
-                modified_at: Date) {
+                updated_at: Date) {
         this.user_id = user_id
         this.username = username
         this.email = email
         this.password = password
         this.salt = salt
         this.created_at = created_at
-        this.modified_at = modified_at
+        this.updated_at = updated_at
     }
 }
 
@@ -75,22 +77,22 @@ export class FeedModel {
     feed_id: string
     title: string
     feed_url: URL
-    home_page_url?: URL
-    description?: string
-    icon_url?: URL
-    favicon_url?: URL
+    home_page_url: Nullable<URL>
+    description: Nullable<string>
+    icon_url: Nullable<URL>
+    favicon_url: Nullable<URL>
     created_at: Date
-    modified_at: Date
+    updated_at: Date
 
     constructor (feed_id: string,
                  title: string,
                  feed_url: URL,
-                 home_page_url?: URL,
-                 description?: string,
-                 icon_url?: URL,
-                 favicon_url?: URL,
+                 home_page_url: URL | null = null,
+                 description: string | null = null,
+                 icon_url: URL | null = null,
+                 favicon_url: URL | null = null,
                  created_at: Date = new Date(),
-                 modified_at: Date = new Date(),) {
+                 updated_at: Date = new Date(),) {
         if (!uuid.validate(feed_id)) {
             throw new Error(`feed_id (${feed_id}) is not a valid UUID`)
         }
@@ -103,7 +105,7 @@ export class FeedModel {
         this.icon_url = icon_url
         this.favicon_url = favicon_url
         this.created_at = created_at
-        this.modified_at = modified_at
+        this.updated_at = updated_at
     }
 }
 export class FeedRepository {
@@ -143,18 +145,18 @@ export class FeedItemModel {
     feed_id: string
     feeditem_json: any
     created_at: Date
-    modified_at: Date
+    updated_at: Date
 
     constructor(feeditem_id: string,
                 feed_id: string,
                 feeditem_json: any,
                 created_at: Date = new Date(),
-                modified_at: Date = new Date()) {
+                updated_at: Date = new Date()) {
         this.feeditem_id = feeditem_id
         this.feed_id = feed_id
         this.feeditem_json = feeditem_json
         this.created_at = created_at
-        this.modified_at = modified_at
+        this.updated_at = updated_at
     }
 }
 
@@ -196,13 +198,13 @@ export class SubscriptionModel {
     user_id_fk: string
     feed_id_fk: string
     created_at: Date
-    modified_at: Date
+    updated_at: Date
 
-    constructor(user_id_fk: string, feed_id_fk: string, created_at: Date, modified_at: Date) {
+    constructor(user_id_fk: string, feed_id_fk: string, created_at: Date, updated_at: Date) {
         this.user_id_fk = user_id_fk
         this.feed_id_fk = feed_id_fk
         this.created_at = created_at
-        this.modified_at = modified_at
+        this.updated_at = updated_at
     }
 }
 
