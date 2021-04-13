@@ -143,18 +143,36 @@ export class FeedItemModel {
 
     feeditem_id: string
     feed_id: string
-    feeditem_json: any
+    content: string
+    content_type: "text" | "html"
+    url: Nullable<URL>
+    title: Nullable<string>
+    summary: Nullable<string>
+    content_published: Nullable<Date>
+    content_updated: Nullable<Date>
     created_at: Date
     updated_at: Date
 
     constructor(feeditem_id: string,
                 feed_id: string,
-                feeditem_json: any,
+                content: string,
+                content_type: "text" | "html" = "text",
+                url: Nullable<URL> = null,
+                title: Nullable<string> = null,
+                summary: Nullable<string> = null,
+                content_published: Nullable<Date> = null,
+                content_updated: Nullable<Date> = null,
                 created_at: Date = new Date(),
                 updated_at: Date = new Date()) {
         this.feeditem_id = feeditem_id
         this.feed_id = feed_id
-        this.feeditem_json = feeditem_json
+        this.content = content
+        this.content_type = content_type
+        this.url = url
+        this.title = title
+        this.summary = summary
+        this.content_published = content_published
+        this.content_updated = content_updated
         this.created_at = created_at
         this.updated_at = updated_at
     }
@@ -175,9 +193,16 @@ export class FeedItemRepository {
             await schema.createTable(FeedItemModel.TableName, table => {
                 table.uuid(nameof<FeedItemModel>("feeditem_id")).unique().primary()
                 table.uuid(nameof<FeedItemModel>("feed_id"))
+                    .notNullable()
                     .references(nameof<FeedModel>("feed_id"))
                     .inTable(FeedModel.TableName)
-                table.json(nameof<FeedItemModel>("feeditem_json"))
+                table.text(nameof<FeedItemModel>("content"))
+                table.enu(nameof<FeedItemModel>("content_type"), ["text", "html"])
+                table.text(nameof<FeedItemModel>("url"))
+                table.text(nameof<FeedItemModel>("title"))
+                table.text(nameof<FeedItemModel>("summary"))
+                table.dateTime(nameof<FeedItemModel>("content_published"))
+                table.dateTime(nameof<FeedItemModel>("content_updated"))
                 table.timestamps()
             })
         }
