@@ -1,7 +1,7 @@
 import { knex } from "knex"
 import * as RssParser from "rss-parser"
 import * as uuid from "uuid"
-import { CreateSchema, FeedItemTable, FeedTable } from "./schema"
+import { FeedItemModel, FeedItemRepository, FeedModel, FeedRepository, SubscriptionRepository, UserRepository } from "./schema"
 
 const db = knex({
     client: "sqlite3",
@@ -11,28 +11,49 @@ const db = knex({
     debug: true
 })
 
-CreateSchema(db)
-    .then(() => {
-        let parser = new RssParser()
-        return parser.parseURL("https://www.reddit.com/.rss")
+const userRepository = new UserRepository(db)
+const feedRepository = new FeedRepository(db)
+const feedItemRepository = new FeedItemRepository(db)
+const subscriptionRepository = new SubscriptionRepository(db)
+
+function createUrl(urlStr?: string): URL | undefined {
+    if (urlStr) {
+        return new URL(urlStr)
+    }
+}
+
+async function setupdb() {
+    await userRepository.createTableInSchema()
+    await feedRepository.createTableInSchema()
+    await feedItemRepository.createTableInSchema()
+    await subscriptionRepository.createTableInSchema()
+}
+
+async function parse_feed() {
+    const parser = new RssParser()
+    const feedUrl = new URL("https://www.reddit.com/.rss")
+
+    const feedData = await parser.parseURL(feedUrl.href)
+    const newFeedRow = new FeedModel(
+        uuid.v4(),
+        feedData.title || "", 
+        createUrl(feedData.feedUrl) || feedUrl,
+        null,
+        feedData.description)
+
+    const newFeedItems = feedData.items.map(v => new FeedItemModel(
+        uuid.v4(),
+        newFeedRow.feed_id,
+        v
+    ))
+
+    return {feed: newFeedRow, feedItems: newFeedItems}
+}
+
+setupdb()
+    .then(parse_feed)
+    .then(async ({feed, feedItems}) => {
+        await feedRepository.insertSingle(feed)
+        await feedItemRepository.insertMany(feedItems)
     })
-    .then(async feed => {
-        const feedUuid = uuid.v4()
-        await db
-            .insert(
-                FeedTable.createRow(
-                    "Reddit",
-                    new URL(feed.feedUrl || "https://www.reddit.com/.rss"),
-                    feed.description,
-                    undefined,
-                    undefined,
-                    undefined,
-                    feedUuid))
-            .into(FeedTable.name)
-        
-        for (const feedItem of feed.items) {
-            await db.insert(FeedItemTable.createRow(feedUuid, feedItem)).into(FeedItemTable.name)
-        }
-    })
-    .catch(err => console.error)
-    .finally(() => console.log("done"))
+    .catch(console.error)
