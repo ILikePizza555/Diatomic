@@ -1,9 +1,19 @@
 import { Knex, knex } from "knex"
-import { fastify } from "fastify"
 import { RepositoryDepot } from "./schema"
-import { createFastifyInstance } from "./fastifyApp"
+import { fastify } from "fastify"
+
 interface AppConfig {
     debug: boolean
+}
+
+function createFastifyInstance(repositoryDepot: RepositoryDepot): FastifyInstance {
+    var fastifyApp = fastify({
+        logger: true
+    })
+
+    fastifyApp.decorate("repositories", repositoryDepot)
+
+    return fastifyApp
 }
 
 async function setup(config: AppConfig) {
@@ -20,7 +30,7 @@ async function setup(config: AppConfig) {
 
     return createFastifyInstance(repositories)
 }
-
+ 
 setup({debug: true})
     .then(fastifyApp => fastifyApp.listen(3000))
     .catch(console.error)
