@@ -15,6 +15,8 @@
  */
 import { Knex } from "knex"
 import * as uuid from "uuid"
+import * as argon2 from "argon2"
+import * as crypto from "node:crypto"
 
 const nameof = <T>(name: Extract<keyof T, string>): string => name
 
@@ -68,6 +70,41 @@ export class UserRepository {
                 table.timestamps()
             })
         }
+    }
+
+    async createNewUser(username: string, email: string, password: string) {
+        const passwordSalt = crypto.randomBytes(128).toString("hex")
+        const passwordHash = await argon2.hash(password + passwordSalt)
+        const model = new UserModel(uuid.v4(), username, email, passwordHash, passwordSalt, new Date(), new Date())
+
+        await this._db(UserModel.TableName).insert(model)
+        return model
+    }
+
+    async queryUser(identifier: string): UserModel | null {
+        const result = await this._db(UserModel.TableName)
+            .where(nameof<UserModel>("username"), identifier)
+            .orWhere(nameof<UserModel>("email"), identifier)
+            .limit(1)
+            .first()
+        
+        if (!result) {
+            return null
+        }
+
+        return this.createModelFromQueryResult(result)
+    }
+
+    protected createModelFromQueryResult(result: any) {
+        return new UserModel(
+            result[nameof<UserModel>("user_id")],
+            result[nameof<UserModel>("username")],
+            result[nameof<UserModel>("email")],
+            result[nameof<UserModel>("password")],
+            result[nameof<UserModel>("salt")],
+            result[nameof<UserModel>("created_at")],
+            result[nameof<UserModel>("updated_at")]
+        )
     }
 }
 
