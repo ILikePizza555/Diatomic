@@ -3,9 +3,7 @@
         "module": "commonjs",
         "target": "ES2019",
         "outDir": "dist",
-        "strict": true,
-        "emitDecoratorMetadata": true,
-        "experimentalDecorators": true
+        "strict": true
     },
     "include": [
         "src"

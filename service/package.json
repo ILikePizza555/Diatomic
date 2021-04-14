@@ -15,9 +15,8 @@
     "fastify-cookie": "^5.3.0",
     "fastify-plugin": "^3.0.0",
     "fastify-session": "^5.2.1",
-    "reflect-metadata": "^0.1.13",
+    "knex": "^0.95.4",
     "rss-parser": "^3.12.0",
-    "typeorm": "^0.2.32",
     "uuid": "^8.3.2"
   },
   "optionalDependencies": {
