@@ -81,7 +81,7 @@ export class UserRepository {
         return model
     }
 
-    async queryUser(identifier: string): UserModel | null {
+    async queryUser(identifier: string): Promise<UserModel | null> {
         const result = await this._db(UserModel.TableName)
             .where(nameof<UserModel>("username"), identifier)
             .orWhere(nameof<UserModel>("email"), identifier)
